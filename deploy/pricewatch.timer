@@ -1,0 +1,9 @@
+[Unit]
+Description=Executa PriceWatch todo dia as 8:00h com atraso do Jitter
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

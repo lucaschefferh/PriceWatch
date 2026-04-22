@@ -1,0 +1,8 @@
+[Unit]
+Description=PriceWatch Sentinel — monitoramento de preços
+
+[Service]
+Type=oneshot
+# Ajuste os dois caminhos abaixo para o caminho do projeto no servidor
+WorkingDirectory=/home/lucas/Documentos/Pessoal/Projetos/PriceWatch
+ExecStart=/home/lucas/Documentos/Pessoal/Projetos/PriceWatch/.venv/bin/python main.py
