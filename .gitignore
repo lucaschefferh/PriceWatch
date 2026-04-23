@@ -9,3 +9,6 @@ teste_db.py
 .claude
 debug_parsers.py
 .env_example
+MELHORIAS.md
+.gitignore
+deploy/deploy.sh

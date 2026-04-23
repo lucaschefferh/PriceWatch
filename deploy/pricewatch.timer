@@ -2,7 +2,7 @@
 Description=Executa PriceWatch todo dia as 8:00h com atraso do Jitter
 
 [Timer]
-OnCalendar=*-*-* 08:00:00
+OnCalendar=*-*-* 08:00:00 America/Sao_Paulo
 Persistent=true
 
 [Install]

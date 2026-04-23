@@ -33,7 +33,7 @@ class BaseParser(ABC):
     def _preco_para_float(self, valor: str) -> float | None:
         """Converte string de preco (ex: 'R$ 1.299,90') para float."""
         try:
-            limpo = valor.replace("R$", "").replace(".", "").replace(",", ".").strip()
+            limpo = valor.replace("R$", "").replace("\xa0", "").replace(".", "").replace(",", ".").strip()
             return float(limpo)
         except (ValueError, AttributeError):
             return None
