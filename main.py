@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
-from core.database import criar_tabelas, buscar_produtos_ativos, salvar_preco, ultimo_preco
+from core.database import criar_tabelas, buscar_produtos_ativos, salvar_preco, ultimo_preco, minimo_historico
 from core.mailer import enviar_alerta
 from parsers.amazon_parser import AmazonParser
 from parsers.inthebox_parser import InTheBoxParser
@@ -72,22 +72,33 @@ def processar_produto(page, produto):
     #imprime o preço capturado
     log.info(f"Preco capturado: R$ {preco_atual:.2f}")
 
-    #busca o preço anterior
     preco_anterior = ultimo_preco(produto["id"])
+    minimo = minimo_historico(produto["id"])
+    config_alerta = produto["config_alerta"]
 
-    #salva o preço no banco
     salvar_preco(produto["id"], preco_atual)
 
-    #verifica se o preço caiu e envia alerta
-    if preco_anterior is not None and preco_atual < preco_anterior:
-        log.info(f"Queda detectada! R$ {preco_anterior:.2f} -> R$ {preco_atual:.2f}. Enviando alerta...")
+    eh_minimo = minimo is not None and preco_atual < minimo
+
+    deve_alertar = False
+    if config_alerta is not None:
+        # Alerta apenas quando o preço cruza o alvo vindo de cima (evita spam em dias consecutivos)
+        cruzou_alvo = preco_atual <= config_alerta and (preco_anterior is None or preco_anterior > config_alerta)
+        if cruzou_alvo:
+            deve_alertar = True
+            log.info(f"Preco alvo atingido: R${preco_atual:.2f} <= alvo R${config_alerta:.2f}")
+    elif preco_anterior is not None and preco_atual < preco_anterior:
+        deve_alertar = True
+        log.info(f"Queda detectada: R${preco_anterior:.2f} -> R${preco_atual:.2f}")
+
+    if deve_alertar:
         try:
-            enviar_alerta(produto["nome"], preco_anterior, preco_atual, produto["url"])
-            log.info("Alerta enviado com sucesso.")
+            enviar_alerta(produto["nome"], preco_anterior, preco_atual, produto["url"], eh_minimo_historico=eh_minimo)
+            log.info(f"Alerta enviado.{' (minimo historico)' if eh_minimo else ''}")
         except Exception as e:
             log.error(f"Erro ao enviar e-mail: {e}")
     else:
-        log.info("Sem queda de preco. Historico atualizado.")
+        log.info("Sem alerta. Historico atualizado.")
 
 #função principal
 def main():

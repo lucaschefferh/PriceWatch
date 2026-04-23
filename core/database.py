@@ -72,6 +72,15 @@ def ultimo_preco(produto_id: int) -> float | None:
         ).fetchone()
         return row["preco"] if row else None
 
+#retorna o menor preço já registrado para o produto
+def minimo_historico(produto_id: int) -> float | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT MIN(preco) as minimo FROM historico_precos WHERE produto_id = ?",
+            (produto_id,),
+        ).fetchone()
+        return row["minimo"] if row and row["minimo"] is not None else None
+
 #retorna a média semestral do produto
 def media_semestral(produto_id: int) -> float | None:
     with get_connection() as conn:
