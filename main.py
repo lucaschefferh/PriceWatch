@@ -60,16 +60,26 @@ def processar_produto(page, produto):
         log.warning(f"Nenhum parser encontrado para a loja '{loja}' (produto id={produto['id']})")
         return
 
-    #faz o scraping do produto
     log.info(f"Scraping: {produto['nome']} ({loja})")
-    preco_atual = parser.get_price(page, produto["url"])
+    preco_atual = None
+    for tentativa in range(3):
+        try:
+            preco_atual = parser.get_price(page, produto["url"])
+        except Exception as e:
+            log.warning(f"Tentativa {tentativa + 1} excecao: {e}")
 
-    #verifica se o preço foi capturado
+        if preco_atual is not None:
+            break
+
+        if tentativa < 2:
+            espera = 30 * (2 ** tentativa)  # 30s, 60s
+            log.warning(f"Tentativa {tentativa + 1} falhou. Aguardando {espera}s...")
+            time.sleep(espera)
+
     if preco_atual is None:
-        log.error(f"Falha ao capturar preco: {produto['nome']}")
+        log.error(f"Falha ao capturar preco apos 3 tentativas: {produto['nome']}")
         return
 
-    #imprime o preço capturado
     log.info(f"Preco capturado: R$ {preco_atual:.2f}")
 
     preco_anterior = ultimo_preco(produto["id"])
