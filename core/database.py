@@ -72,6 +72,17 @@ def ultimo_preco(produto_id: int) -> float | None:
         ).fetchone()
         return row["preco"] if row else None
 
+#retorna o histórico de preços dos últimos N dias para gerar o gráfico
+def historico_precos_produto(produto_id: int, dias: int = 60) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT preco, data_captura FROM historico_precos
+               WHERE produto_id = ? AND data_captura >= datetime('now', ?)
+               ORDER BY data_captura ASC""",
+            (produto_id, f"-{dias} days"),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
 #retorna o menor preço já registrado para o produto
 def minimo_historico(produto_id: int) -> float | None:
     with get_connection() as conn:

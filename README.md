@@ -1,6 +1,6 @@
 # PriceWatch Sentinel
 
-Monitor automatizado de preços para e-commerces brasileiros. Roda 24/7 em servidor local, detecta quedas de preço e envia alertas por e-mail.
+Monitor automatizado de preços para e-commerces brasileiros. Roda em servidor local via systemd, detecta quedas de preço e envia alertas por e-mail com gráfico de histórico.
 
 **Lojas suportadas:** Amazon, Magalu, Mercado Livre, InTheBox
 
@@ -11,9 +11,15 @@ Monitor automatizado de preços para e-commerces brasileiros. Roda 24/7 em servi
 A cada execução o sistema:
 1. Busca todos os produtos ativos no banco de dados
 2. Faz scraping do preço atual via Playwright (modo headless + stealth)
-3. Compara com o último preço registrado
-4. Envia e-mail de alerta se o preço caiu
+3. Compara com o último preço registrado e com o preço alvo configurado
+4. Envia e-mail de alerta com gráfico de histórico se o preço caiu ou atingiu o alvo
 5. Salva o novo preço no histórico
+6. Ao final, envia um resumo diário com todos os produtos monitorados
+
+**Lógica de alerta:**
+- **Com preço alvo (`config_alerta`):** notifica apenas quando o preço cruza o alvo vindo de cima, evitando spam em dias consecutivos
+- **Sem preço alvo:** notifica em qualquer queda em relação ao dia anterior
+- Em ambos os casos, o e-mail indica quando o preço atingiu o menor valor já registrado
 
 ---
 
@@ -28,8 +34,8 @@ A cada execução o sistema:
 
 ```bash
 # Clone o repositório
-git clone https://github.com/seu-usuario/pricewatch.git
-cd pricewatch
+git clone https://github.com/lucaschefferh/PriceWatch.git
+cd PriceWatch
 
 # Crie o ambiente virtual e instale as dependências
 python3 -m venv .venv
@@ -37,7 +43,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Instale o browser do Playwright
-playwright install chromium
+playwright install chromium --with-deps
 ```
 
 ---
@@ -57,7 +63,7 @@ EMAIL_DESTINO=destino@gmail.com
 # Banco de dados
 DB_PATH=data/prices.db
 
-# Jitter anti-ban em segundos
+# Jitter anti-ban em segundos (atraso aleatório antes de iniciar)
 JITTER_MIN=60
 JITTER_MAX=1800
 ```
@@ -78,7 +84,7 @@ mkdir data
 python adicionar_produto.py
 ```
 
-O script vai pedir o nome, URL e loja do produto interativamente.
+O script pede o nome, URL, loja e um preço alvo opcional (deixe em branco para alertar em qualquer queda).
 
 ---
 
@@ -96,11 +102,12 @@ Copie os arquivos de configuração para o systemd do usuário:
 
 ```bash
 mkdir -p ~/.config/systemd/user
+# Ajuste os caminhos no pricewatch.service antes de copiar
 cp deploy/pricewatch.service ~/.config/systemd/user/
 cp deploy/pricewatch.timer ~/.config/systemd/user/
 ```
 
-Edite o `pricewatch.service` e ajuste os caminhos para o diretório do projeto no seu servidor:
+Edite o `pricewatch.service` ajustando os caminhos para o diretório do projeto:
 
 ```ini
 WorkingDirectory=/caminho/para/pricewatch
@@ -115,18 +122,18 @@ systemctl --user enable --now pricewatch.timer
 loginctl enable-linger $USER
 ```
 
-Por padrão o sistema executa todo dia às 8h. O jitter configurado no `.env` adiciona um atraso aleatório para evitar bloqueio de IP.
+O sistema executa todo dia às **8h (horário de Brasília)**. O jitter adiciona um atraso aleatório configurável para evitar bloqueio de IP.
 
 ---
 
 ## Verificar logs
 
 ```bash
-# Últimas 50 linhas do log
+# Log do serviço via systemd
 journalctl --user -u pricewatch.service -n 50
 
 # Próxima execução agendada
-systemctl --user status pricewatch.timer
+systemctl --user list-timers pricewatch.timer
 ```
 
 Os logs também ficam salvos em `data/pricewatch.log`.

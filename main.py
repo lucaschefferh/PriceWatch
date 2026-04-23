@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
 
-from core.database import criar_tabelas, buscar_produtos_ativos, salvar_preco, ultimo_preco, minimo_historico
+from core.database import criar_tabelas, buscar_produtos_ativos, salvar_preco, ultimo_preco, minimo_historico, historico_precos_produto
 from core.mailer import enviar_alerta, enviar_resumo_diario
 from parsers.amazon_parser import AmazonParser
 from parsers.inthebox_parser import InTheBoxParser
@@ -112,7 +112,8 @@ def processar_produto(page, produto) -> dict:
 
     if deve_alertar:
         try:
-            enviar_alerta(produto["nome"], preco_anterior, preco_atual, produto["url"], eh_minimo_historico=eh_minimo)
+            historico = historico_precos_produto(produto["id"])
+            enviar_alerta(produto["nome"], preco_anterior, preco_atual, produto["url"], eh_minimo_historico=eh_minimo, historico=historico)
             log.info(f"Alerta enviado.{' (minimo historico)' if eh_minimo else ''}")
             resultado["alerta_enviado"] = True
         except Exception as e:

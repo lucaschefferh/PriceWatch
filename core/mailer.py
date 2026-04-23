@@ -8,7 +8,46 @@ from dotenv import load_dotenv
 load_dotenv()
 
 #função para enviar o alerta de preço
-def enviar_alerta(nome_produto: str, preco_anterior: float | None, preco_atual: float, url: str, eh_minimo_historico: bool = False):
+def _gerar_grafico_base64(historico: list[dict]) -> str | None:
+    """Gera gráfico de histórico de preços e retorna string base64 PNG, ou None se falhar."""
+    if len(historico) < 2:
+        return None
+    try:
+        import io
+        import base64
+        from datetime import datetime
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+
+        datas  = [datetime.fromisoformat(r["data_captura"]) for r in historico]
+        precos = [r["preco"] for r in historico]
+
+        fig, ax = plt.subplots(figsize=(7, 2.8))
+        ax.plot(datas, precos, color="#e44444", linewidth=2, marker="o", markersize=3, zorder=3)
+        ax.fill_between(datas, precos, min(precos) * 0.995, alpha=0.08, color="#e44444")
+        ax.scatter(datas[-1:], precos[-1:], color="#e44444", s=60, zorder=4)
+
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: f"R${v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        fig.autofmt_xdate(rotation=30, ha="right")
+        ax.grid(axis="y", linestyle="--", alpha=0.4)
+        for spine in ["top", "right"]:
+            ax.spines[spine].set_visible(False)
+        plt.tight_layout()
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format="png", dpi=110, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode()
+    except Exception:
+        return None
+
+
+def enviar_alerta(nome_produto: str, preco_anterior: float | None, preco_atual: float, url: str, eh_minimo_historico: bool = False, historico: list[dict] | None = None):
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", 587))
     smtp_user = os.getenv("SMTP_USER")
@@ -25,10 +64,13 @@ def enviar_alerta(nome_produto: str, preco_anterior: float | None, preco_atual: 
     else:
         linha_reducao = ""
 
+    grafico_b64 = _gerar_grafico_base64(historico) if historico else None
+    bloco_grafico = f'<img src="data:image/png;base64,{grafico_b64}" style="max-width:100%;margin-top:16px;border-radius:4px;" alt="Historico de precos"/>' if grafico_b64 else ""
+
     assunto = f"[PriceWatch] {'Minimo historico: ' if eh_minimo_historico else 'Preco alvo atingido: '}{nome_produto}"
 
     corpo_html = f"""
-    <html><body style="font-family: Arial, sans-serif; color: #333;">
+    <html><body style="font-family: Arial, sans-serif; color: #333; max-width: 600px;">
         <h2 style="color: #e44;">Alerta de Preco — PriceWatch</h2>
         {badge_minimo}
         <p><strong>Produto:</strong> {nome_produto}</p>
@@ -40,6 +82,8 @@ def enviar_alerta(nome_produto: str, preco_anterior: float | None, preco_atual: 
             </tr>
             {linha_reducao}
         </table>
+        {bloco_grafico}
+        <br>
         <a href="{url}" style="display:inline-block; padding:12px 24px; background:#e44; color:#fff;
            text-decoration:none; border-radius:4px;">Ver produto</a>
     </body></html>
