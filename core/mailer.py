@@ -1,5 +1,6 @@
 import os
 import smtplib
+from datetime import date
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
@@ -51,8 +52,84 @@ def enviar_alerta(nome_produto: str, preco_anterior: float | None, preco_atual: 
     msg["To"] = destino
     msg.attach(MIMEText(corpo_html, "html"))
 
-    #conecta ao servidor SMTP e envia o email
     with smtplib.SMTP(smtp_host, smtp_port) as server:
         server.starttls()
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_user, destino, msg.as_string())
+
+
+def _smtp_send(assunto: str, corpo_html: str):
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    destino = os.getenv("EMAIL_DESTINO")
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = assunto
+    msg["From"] = smtp_user
+    msg["To"] = destino
+    msg.attach(MIMEText(corpo_html, "html"))
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, destino, msg.as_string())
+
+
+def enviar_resumo_diario(resultados: list[dict]):
+    """Envia e-mail com tabela resumindo todos os produtos monitorados no dia."""
+    linhas = ""
+    for r in resultados:
+        if r["erro"]:
+            variacao = '<span style="color:#e44;">Erro</span>'
+            preco_str = "—"
+        else:
+            preco_str = f"R$ {r['preco_atual']:.2f}" if r['preco_atual'] else "—"
+            if r["preco_anterior"] and r["preco_atual"]:
+                diff = r["preco_atual"] - r["preco_anterior"]
+                if diff < 0:
+                    variacao = f'<span style="color:green;">▼ R$ {abs(diff):.2f}</span>'
+                elif diff > 0:
+                    variacao = f'<span style="color:#e44;">▲ R$ {diff:.2f}</span>'
+                else:
+                    variacao = '<span style="color:#999;">—</span>'
+            else:
+                variacao = '<span style="color:#999;">Primeiro registro</span>'
+
+        alerta = "✓" if r["alerta_enviado"] else ""
+        linhas += f"""
+        <tr>
+            <td style="padding:8px 12px;border-bottom:1px solid #eee;">{r['nome']}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #eee;color:#888;">{r['loja']}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #eee;"><strong>{preco_str}</strong></td>
+            <td style="padding:8px 12px;border-bottom:1px solid #eee;">{variacao}</td>
+            <td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:center;color:green;">{alerta}</td>
+        </tr>"""
+
+    erros = sum(1 for r in resultados if r["erro"])
+    alertas = sum(1 for r in resultados if r["alerta_enviado"])
+    hoje = date.today().strftime("%d/%m/%Y")
+
+    corpo_html = f"""
+    <html><body style="font-family: Arial, sans-serif; color: #333; max-width: 700px;">
+        <h2 style="color:#333;">PriceWatch — Resumo de {hoje}</h2>
+        <p>{len(resultados)} produto(s) monitorado(s) &nbsp;|&nbsp;
+           {alertas} alerta(s) enviado(s) &nbsp;|&nbsp;
+           <span style="color:{'#e44' if erros else '#999'};">{erros} erro(s)</span></p>
+        <table style="width:100%;border-collapse:collapse;margin-top:16px;">
+            <thead>
+                <tr style="background:#f5f5f5;text-align:left;">
+                    <th style="padding:8px 12px;">Produto</th>
+                    <th style="padding:8px 12px;">Loja</th>
+                    <th style="padding:8px 12px;">Preco atual</th>
+                    <th style="padding:8px 12px;">Variacao</th>
+                    <th style="padding:8px 12px;text-align:center;">Alerta</th>
+                </tr>
+            </thead>
+            <tbody>{linhas}</tbody>
+        </table>
+    </body></html>
+    """
+
+    _smtp_send(f"[PriceWatch] Resumo diario — {hoje}", corpo_html)
