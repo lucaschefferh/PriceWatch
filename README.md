@@ -1,5 +1,7 @@
 # PriceWatch Sentinel
 
+[![Tests](https://github.com/lucaschefferh/PriceWatch/actions/workflows/tests.yml/badge.svg)](https://github.com/lucaschefferh/PriceWatch/actions/workflows/tests.yml)
+
 Monitor automatizado de preços para e-commerces brasileiros. Roda em servidor local via systemd, detecta quedas de preço e envia alertas por e-mail com gráfico de histórico.
 
 **Lojas suportadas:** Amazon, Magalu, Mercado Livre, InTheBox
